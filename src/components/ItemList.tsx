@@ -16,6 +16,7 @@ export default function ItemList() {
   const containerRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false);
 
+  // Загрузка элементов
   const loadItems = async (
     page: number,
     search: string,
@@ -28,7 +29,9 @@ export default function ItemList() {
 
     try {
       const response = await fetch(
-        `https://test-case-back-production.up.railway.app/items?page=${page}&search=${search}`
+        `http://localhost:4000/items?page=${page}&search=${encodeURIComponent(
+          search
+        )}`
       );
       const data = await response.json();
 
@@ -47,21 +50,21 @@ export default function ItemList() {
     loadingRef.current = false;
   };
 
+  // Загрузка выбранных элементов
   const loadSelected = async () => {
     try {
-      const response = await fetch(
-        "https://test-case-back-production.up.railway.app/selected"
-      );
+      const response = await fetch("http://localhost:4000/selected");
       const selected = await response.json();
-      setSelectedIds(new Set(selected));
+      setSelectedIds(new Set<number>(selected));
     } catch (error) {
       console.error("Ошибка загрузки выбранных:", error);
     }
   };
 
+  // Сохранение выбранных элементов
   const saveSelected = async (selected: Set<number>) => {
     try {
-      await fetch("https://test-case-back-production.up.railway.app/selected", {
+      await fetch("http://localhost:4000/selected", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ selected: Array.from(selected) }),
@@ -71,11 +74,13 @@ export default function ItemList() {
     }
   };
 
+  // Инициализация
   useEffect(() => {
     loadSelected();
     loadItems(1, "");
   }, []);
 
+  // Поиск
   const handleSearch = (value: string) => {
     setSearchTerm(value);
     setCurrentPage(1);
@@ -83,6 +88,7 @@ export default function ItemList() {
     loadItems(1, value, false);
   };
 
+  // Выбор элемента
   const toggleSelect = (id: number) => {
     const newSelected = new Set(selectedIds);
 
@@ -96,6 +102,7 @@ export default function ItemList() {
     saveSelected(newSelected);
   };
 
+  // Скролл для подгрузки
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
 
@@ -106,6 +113,7 @@ export default function ItemList() {
     }
   };
 
+  // Drag and Drop
   const handleDragStart = (e: React.DragEvent, id: number) => {
     setDraggedItem(id);
     e.dataTransfer.effectAllowed = "move";
@@ -121,22 +129,27 @@ export default function ItemList() {
 
     if (!draggedItem || draggedItem === targetId) return;
 
+    // Индексы В ТЕКУЩЕМ (фильтрованном) списке — для локального UI
     const fromIndex = items.findIndex((item) => item.id === draggedItem);
     const toIndex = items.findIndex((item) => item.id === targetId);
-
     if (fromIndex === -1 || toIndex === -1) return;
 
+    // Локально двигаем ПОСЛЕ target
     const newItems = [...items];
     const [movedItem] = newItems.splice(fromIndex, 1);
-    newItems.splice(toIndex, 0, movedItem);
+    const insertIndex = fromIndex < toIndex ? toIndex : toIndex + 1;
+    newItems.splice(insertIndex, 0, movedItem);
     setItems(newItems);
 
+    // На сервер отправляем ГЛОБАЛЬНЫЕ id
     try {
-      await fetch("https://test-case-back-production.up.railway.app/reorder", {
+      await fetch("http://localhost:4000/reorder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fromIndex, toIndex }),
+        body: JSON.stringify({ fromId: draggedItem, toId: targetId }),
       });
+      // при желании можно обновить текущую страницу:
+      // loadItems(1, searchTerm, false);
     } catch (error) {
       console.error("Ошибка сортировки:", error);
     }
@@ -148,6 +161,7 @@ export default function ItemList() {
     <div className="max-w-2xl mx-auto p-6 bg-gray-900 text-white rounded-lg">
       <h1 className="text-3xl font-bold mb-6">Список элементов</h1>
 
+      {/* Поиск */}
       <div className="mb-4">
         <input
           type="text"
@@ -158,11 +172,13 @@ export default function ItemList() {
         />
       </div>
 
+      {/* Статистика */}
       <div className="mb-4 flex justify-between text-gray-300">
         <span>Выбрано: {selectedIds.size}</span>
         <span>Показано: {items.length}</span>
       </div>
 
+      {/* Список */}
       <div
         ref={containerRef}
         className="border border-gray-700 rounded-lg overflow-auto"
