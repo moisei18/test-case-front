@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 
+const URL = "https://test-case-back-production.up.railway.app"
+// const URL = "http://localhost:4000"
+
 interface Item {
   id: number;
 }
@@ -15,6 +18,8 @@ export default function ItemList() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false);
+  const searchTimeoutRef = useRef<number | null>(null); // для дебаунса
+  const requestCounterRef = useRef(0); // для отслеживания актуального запроса
 
   // Загрузка элементов
   const loadItems = async (
@@ -27,13 +32,21 @@ export default function ItemList() {
     loadingRef.current = true;
     setLoading(true);
 
+    // Увеличиваем счетчик запросов для этого конкретного запроса
+    const currentRequestId = ++requestCounterRef.current;
+
     try {
       const response = await fetch(
-        `http://localhost:4000/items?page=${page}&search=${encodeURIComponent(
+        `${URL}/items?page=${page}&search=${encodeURIComponent(
           search
         )}`
       );
       const data = await response.json();
+
+      // Проверяем, что это еще актуальный запрос
+      if (currentRequestId !== requestCounterRef.current) {
+        return; // Игнорируем устаревший ответ
+      }
 
       if (append && page > 1) {
         setItems((prev) => [...prev, ...data.items]);
@@ -44,6 +57,10 @@ export default function ItemList() {
       setHasMore(data.hasMore);
     } catch (error) {
       console.error("Ошибка загрузки:", error);
+      // Проверяем актуальность и тут
+      if (currentRequestId !== requestCounterRef.current) {
+        return;
+      }
     }
 
     setLoading(false);
@@ -53,7 +70,9 @@ export default function ItemList() {
   // Загрузка выбранных элементов
   const loadSelected = async () => {
     try {
-      const response = await fetch("http://localhost:4000/selected");
+      const response = await fetch(
+        `${URL}/selected` // Исправил шаблонную строку
+      );
       const selected = await response.json();
       setSelectedIds(new Set<number>(selected));
     } catch (error) {
@@ -64,7 +83,7 @@ export default function ItemList() {
   // Сохранение выбранных элементов
   const saveSelected = async (selected: Set<number>) => {
     try {
-      await fetch("http://localhost:4000/selected", {
+      await fetch(`${URL}/selected`, { // Исправил шаблонную строку
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ selected: Array.from(selected) }),
@@ -80,12 +99,31 @@ export default function ItemList() {
     loadItems(1, "");
   }, []);
 
-  // Поиск
-  const handleSearch = (value: string) => {
+  // Дебаунс для поиска
+  useEffect(() => {
+    // Очищаем предыдущий таймер
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Устанавливаем новый таймер на 300мс
+    searchTimeoutRef.current = setTimeout(() => {
+      setCurrentPage(1);
+      setHasMore(true);
+      loadItems(1, searchTerm, false);
+    }, 300);
+
+    // Cleanup функция
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchTerm]);
+
+  // Обработчик изменения поискового термина
+  const handleSearchChange = (value: string) => {
     setSearchTerm(value);
-    setCurrentPage(1);
-    setHasMore(true);
-    loadItems(1, value, false);
   };
 
   // Выбор элемента
@@ -143,7 +181,7 @@ export default function ItemList() {
 
     // На сервер отправляем ГЛОБАЛЬНЫЕ id
     try {
-      await fetch("http://localhost:4000/reorder", {
+      await fetch(`${URL}/reorder`, { // Исправил шаблонную строку
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fromId: draggedItem, toId: targetId }),
@@ -167,7 +205,7 @@ export default function ItemList() {
           type="text"
           placeholder="Поиск по номеру..."
           value={searchTerm}
-          onChange={(e) => handleSearch(e.target.value)}
+          onChange={(e) => handleSearchChange(e.target.value)}
           className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 outline-none"
         />
       </div>
