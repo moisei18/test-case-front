@@ -18,10 +18,9 @@ export default function ItemList() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false);
-  const searchTimeoutRef = useRef<number | null>(null); // для дебаунса
-  const requestCounterRef = useRef(0); // для отслеживания актуального запроса
+  const searchTimeoutRef = useRef<number | null>(null); 
+  const requestCounterRef = useRef(0); 
 
-  // Загрузка элементов
   const loadItems = async (
     page: number,
     search: string,
@@ -32,7 +31,6 @@ export default function ItemList() {
     loadingRef.current = true;
     setLoading(true);
 
-    // Увеличиваем счетчик запросов для этого конкретного запроса
     const currentRequestId = ++requestCounterRef.current;
 
     try {
@@ -43,9 +41,8 @@ export default function ItemList() {
       );
       const data = await response.json();
 
-      // Проверяем, что это еще актуальный запрос
       if (currentRequestId !== requestCounterRef.current) {
-        return; // Игнорируем устаревший ответ
+        return; 
       }
 
       if (append && page > 1) {
@@ -57,7 +54,6 @@ export default function ItemList() {
       setHasMore(data.hasMore);
     } catch (error) {
       console.error("Ошибка загрузки:", error);
-      // Проверяем актуальность и тут
       if (currentRequestId !== requestCounterRef.current) {
         return;
       }
@@ -67,11 +63,10 @@ export default function ItemList() {
     loadingRef.current = false;
   };
 
-  // Загрузка выбранных элементов
   const loadSelected = async () => {
     try {
       const response = await fetch(
-        `${URL}/selected` // Исправил шаблонную строку
+        `${URL}/selected` 
       );
       const selected = await response.json();
       setSelectedIds(new Set<number>(selected));
@@ -80,10 +75,9 @@ export default function ItemList() {
     }
   };
 
-  // Сохранение выбранных элементов
   const saveSelected = async (selected: Set<number>) => {
     try {
-      await fetch(`${URL}/selected`, { // Исправил шаблонную строку
+      await fetch(`${URL}/selected`, { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ selected: Array.from(selected) }),
@@ -93,27 +87,22 @@ export default function ItemList() {
     }
   };
 
-  // Инициализация
   useEffect(() => {
     loadSelected();
     loadItems(1, "");
   }, []);
 
-  // Дебаунс для поиска
   useEffect(() => {
-    // Очищаем предыдущий таймер
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Устанавливаем новый таймер на 300мс
     searchTimeoutRef.current = setTimeout(() => {
       setCurrentPage(1);
       setHasMore(true);
       loadItems(1, searchTerm, false);
     }, 300);
 
-    // Cleanup функция
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
@@ -121,12 +110,10 @@ export default function ItemList() {
     };
   }, [searchTerm]);
 
-  // Обработчик изменения поискового термина
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
   };
 
-  // Выбор элемента
   const toggleSelect = (id: number) => {
     const newSelected = new Set(selectedIds);
 
@@ -140,7 +127,6 @@ export default function ItemList() {
     saveSelected(newSelected);
   };
 
-  // Скролл для подгрузки
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
 
@@ -151,7 +137,6 @@ export default function ItemList() {
     }
   };
 
-  // Drag and Drop
   const handleDragStart = (e: React.DragEvent, id: number) => {
     setDraggedItem(id);
     e.dataTransfer.effectAllowed = "move";
@@ -167,27 +152,22 @@ export default function ItemList() {
 
     if (!draggedItem || draggedItem === targetId) return;
 
-    // Индексы В ТЕКУЩЕМ (фильтрованном) списке — для локального UI
     const fromIndex = items.findIndex((item) => item.id === draggedItem);
     const toIndex = items.findIndex((item) => item.id === targetId);
     if (fromIndex === -1 || toIndex === -1) return;
 
-    // Локально двигаем ПОСЛЕ target
     const newItems = [...items];
     const [movedItem] = newItems.splice(fromIndex, 1);
     const insertIndex = fromIndex < toIndex ? toIndex : toIndex + 1;
     newItems.splice(insertIndex, 0, movedItem);
     setItems(newItems);
 
-    // На сервер отправляем ГЛОБАЛЬНЫЕ id
     try {
-      await fetch(`${URL}/reorder`, { // Исправил шаблонную строку
+      await fetch(`${URL}/reorder`, { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fromId: draggedItem, toId: targetId }),
       });
-      // при желании можно обновить текущую страницу:
-      // loadItems(1, searchTerm, false);
     } catch (error) {
       console.error("Ошибка сортировки:", error);
     }
